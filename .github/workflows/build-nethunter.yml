@@ -88,59 +88,36 @@ jobs:
           make -j"$(nproc)" LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" gki_defconfig
           test -f out/.config
 
-      - name: Inject NetHunter config layer
+      - name: Inject NetHunter config layer (force BUILT-IN =y)
         run: |
-          cat >> common/out/.config <<-'EOF'
-          # ================= NetHunter config layer (v1) =================
-          # ---- External USB Bluetooth -> hci0 (fixes CONFIG_BT_HCIBTUSB not set) ----
-          CONFIG_BT=y
-          CONFIG_BT_HCIBTUSB=y
-          CONFIG_BT_HCIBTUSB_BCM=y
-          CONFIG_BT_HCIBTUSB_RTL=y
-          CONFIG_BT_HCIBTUSB_MTK=y
-          # ---- USB Wi-Fi adapters (in-tree, monitor-capable) ----
-          CONFIG_WLAN=y
-          CONFIG_CFG80211=y
-          CONFIG_CFG80211_WEXT=y
-          CONFIG_MAC80211=y
-          CONFIG_WLAN_VENDOR_ATH=y
-          CONFIG_ATH_COMMON=y
-          CONFIG_ATH9K_HTC=y
-          CONFIG_CARL9170=y
-          CONFIG_WLAN_VENDOR_MEDIATEK=y
-          CONFIG_MT7601U=y
-          CONFIG_MT76x0U=y
-          CONFIG_MT76x2U=y
-          CONFIG_WLAN_VENDOR_RALINK=y
-          CONFIG_RT2800USB=y
-          CONFIG_RT2800USB_RT35XX=y
-          CONFIG_RT2800USB_RT3573=y
-          CONFIG_RT2800USB_RT53XX=y
-          CONFIG_RT2800USB_RT55XX=y
-          CONFIG_RT2800USB_UNKNOWN=y
-          CONFIG_WLAN_VENDOR_REALTEK=y
-          CONFIG_RTL8187=y
-          CONFIG_RTL8XXXU=y
-          CONFIG_RTL8XXXU_UNTESTED=y
-          # ---- USB gadget / HID (BadUSB) ----
-          CONFIG_USB_CONFIGFS=y
-          CONFIG_USB_CONFIGFS_F_HID=y
-          CONFIG_USB_CONFIGFS_F_FS=y
-          CONFIG_USB_CONFIGFS_ACM=y
-          CONFIG_USB_CONFIGFS_SERIAL=y
-          CONFIG_USB_CONFIGFS_NCM=y
-          CONFIG_USB_CONFIGFS_RNDIS=y
-          CONFIG_USB_CONFIGFS_MASS_STORAGE=y
-          # ==============================================================
-          EOF
+          cd common
+          # scripts/config -e sets each symbol to =y (built into the Image), which is
+          # indentation-proof (unlike a heredoc) and forces built-in even where the
+          # GKI defconfig had them as modules.
+          ./scripts/config --file out/.config \
+            -e CONFIG_BT -e CONFIG_BT_HCIBTUSB -e CONFIG_BT_HCIBTUSB_BCM \
+            -e CONFIG_BT_HCIBTUSB_RTL -e CONFIG_BT_HCIBTUSB_MTK \
+            -e CONFIG_WLAN -e CONFIG_CFG80211 -e CONFIG_CFG80211_WEXT -e CONFIG_MAC80211 \
+            -e CONFIG_WLAN_VENDOR_ATH -e CONFIG_ATH_COMMON -e CONFIG_ATH9K_HTC -e CONFIG_CARL9170 \
+            -e CONFIG_WLAN_VENDOR_MEDIATEK -e CONFIG_MT7601U -e CONFIG_MT76x0U -e CONFIG_MT76x2U \
+            -e CONFIG_WLAN_VENDOR_RALINK -e CONFIG_RT2800USB -e CONFIG_RT2800USB_RT35XX \
+            -e CONFIG_RT2800USB_RT3573 -e CONFIG_RT2800USB_RT53XX -e CONFIG_RT2800USB_RT55XX \
+            -e CONFIG_RT2800USB_UNKNOWN \
+            -e CONFIG_WLAN_VENDOR_REALTEK -e CONFIG_RTL8187 -e CONFIG_RTL8XXXU -e CONFIG_RTL8XXXU_UNTESTED \
+            -e CONFIG_USB_CONFIGFS -e CONFIG_USB_CONFIGFS_F_HID -e CONFIG_USB_CONFIGFS_F_FS \
+            -e CONFIG_USB_CONFIGFS_ACM -e CONFIG_USB_CONFIGFS_SERIAL -e CONFIG_USB_CONFIGFS_NCM \
+            -e CONFIG_USB_CONFIGFS_RNDIS -e CONFIG_USB_CONFIGFS_MASS_STORAGE
+          echo "scripts/config applied."
 
       - name: Finalize defconfig (olddefconfig drops any unmet options)
         run: |
           cd common
           export PATH="${CLANG_PATH}:${PATH}"
           make -j"$(nproc)" LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" olddefconfig
-          echo "===== Did our key flags survive? ====="
-          grep -E "CONFIG_BT_HCIBTUSB=|CONFIG_ATH9K_HTC=|CONFIG_MT76x2U=|CONFIG_RTL8XXXU=|CONFIG_USB_CONFIGFS_F_HID=" out/.config || true
+          echo "===== Key flags (want =y, NOT =m) ====="
+          grep -E "^CONFIG_BT=|^CONFIG_BT_HCIBTUSB=|^CONFIG_CFG80211=|^CONFIG_MAC80211=|^CONFIG_ATH9K_HTC=|^CONFIG_MT76x2U=|^CONFIG_RTL8XXXU=|^CONFIG_USB_CONFIGFS_F_HID=" out/.config || true
+          echo "===== any that fell back to =m? ====="
+          grep -E "^CONFIG_(BT|BT_HCIBTUSB|CFG80211|MAC80211|ATH9K_HTC|MT76x2U|RTL8XXXU)=m" out/.config && echo "!! WARNING: above are modules, not built-in" || echo "good - none of the key ones are =m"
 
       - name: Build Image
         run: |
@@ -154,11 +131,17 @@ jobs:
         run: |
           git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" AK3
           rm -rf AK3/.git
-          # Skip device-name check (works on cheetah), flash to boot, keep ramdisk
+          # ---- Configure AnyKernel for cheetah (Tensor, A/B slots) ----
           sed -i 's/do.devicecheck=1/do.devicecheck=0/' AK3/anykernel.sh || true
-          sed -i 's/^kernel.string=.*/kernel.string=NetHunter GKI 6.1 cheetah (v1)/' AK3/anykernel.sh || true
+          sed -i 's/^kernel.string=.*/kernel.string=NetHunter GKI 6.1 cheetah (v1.1)/' AK3/anykernel.sh || true
+          # point at the boot partition BY NAME (auto-resolves) instead of the Galaxy-Nexus OMAP path
+          sed -i 's|^BLOCK=.*|BLOCK=boot;|' AK3/anykernel.sh
+          # cheetah is an A/B slot device
+          sed -i 's|^IS_SLOT_DEVICE=.*|IS_SLOT_DEVICE=1;|' AK3/anykernel.sh
+          echo "--- AK3 flash target config ---"
+          grep -E "^BLOCK=|^IS_SLOT_DEVICE=|^PATCH_VBMETA_FLAG=|do.devicecheck=" AK3/anykernel.sh
           cp common/out/arch/arm64/boot/Image AK3/Image
-          ZIP="NetHunter-cheetah-gki6.1-v1-$(date +%y%m%d).zip"
+          ZIP="NetHunter-cheetah-gki6.1-v1.1-$(date +%y%m%d).zip"
           ( cd AK3 && zip -r9 "../output_artifacts/$ZIP" . -x "*.git*" )
           echo "Packaged: $ZIP"
 
