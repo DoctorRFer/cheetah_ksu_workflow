@@ -47,28 +47,21 @@ jobs:
           ls -la /usr/lib/x86_64-linux-gnu/libxml2.so* 2>/dev/null || echo "!! libxml2.so.2 MISSING"
           mkdir -p output_artifacts
 
-      - name: Download kernel source
+      - name: Download kernel source (OFFICIAL Google ACK)
         run: |
-          mkdir -p common
-          echo "Downloading Pantah GKI 6.1 source..."
-          aria2c -s16 -x16 -k1M "${{ env.PANTAH_SOURCE_URL }}" -o pantah.tar.xz
-          mkdir -p temp_pantah
-          tar -xf pantah.tar.xz -C temp_pantah
-          rm -f pantah.tar.xz
-          if   [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
-          elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
-          elif [ -d "temp_pantah/common/ack" ]; then cp -a temp_pantah/common/ack/. common/
-          elif [ -f "temp_pantah/Makefile" ]; then cp -a temp_pantah/. common/
-          fi
-          rm -rf temp_pantah
-          # allow modifications / stop dirty+ABI gripes
+          echo "Cloning official Google kernel/common @ android14-6.1-2026-03_r25 (kernel 6.1.162)..."
+          git clone --depth=1 -b android14-6.1-2026-03_r25 \
+            https://android.googlesource.com/kernel/common common
+          echo "=== kernel version straight from Google source ==="
+          head -n 4 common/Makefile
+          # allow our config modifications / stop dirty+ABI gripes
           rm -f common/android/abi_gki_protected_exports_* || true
           sed -i 's/ -dirty//g;s/-dirty//g' common/scripts/setlocalversion 2>/dev/null || true
           sed -i 's/check_defconfig//' common/build.config.gki 2>/dev/null || true
           if [ ! -f common/Makefile ] || [ ! -f common/arch/arm64/configs/gki_defconfig ]; then
             echo "ERROR: kernel source tree invalid"; ls -la common; exit 1
           fi
-          echo "Source OK:"; head -n 4 common/Makefile
+          echo "Official Google source ready."
 
       - name: Download toolchains
         run: |
