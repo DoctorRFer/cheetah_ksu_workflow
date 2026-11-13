@@ -36,34 +36,32 @@ jobs:
 
       - name: Set up build environment
         run: |
+          echo "=================================================="
+          echo "   NETHUNTER WORKFLOW v1.3  (runner: $(lsb_release -ds 2>/dev/null))"
+          echo "=================================================="
           sudo apt update
           sudo apt install -y --no-install-recommends \
-            ccache zstd aria2 libssl-dev libelf-dev libxml2 bc bison flex make \
+            ccache zstd aria2 libssl-dev libelf-dev libxml2 libxml2-dev bc bison flex make \
             gcc g++ pahole zip unzip tar xz-utils curl wget
+          echo "--- libxml2 present? ---"
+          ls -la /usr/lib/x86_64-linux-gnu/libxml2.so* 2>/dev/null || echo "!! libxml2.so.2 MISSING"
           mkdir -p output_artifacts
 
-      - name: Download kernel source
+      - name: Download kernel source (OFFICIAL Google ACK)
         run: |
-          mkdir -p common
-          echo "Downloading Pantah GKI 6.1 source..."
-          aria2c -s16 -x16 -k1M "${{ env.PANTAH_SOURCE_URL }}" -o pantah.tar.xz
-          mkdir -p temp_pantah
-          tar -xf pantah.tar.xz -C temp_pantah
-          rm -f pantah.tar.xz
-          if   [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
-          elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
-          elif [ -d "temp_pantah/common/ack" ]; then cp -a temp_pantah/common/ack/. common/
-          elif [ -f "temp_pantah/Makefile" ]; then cp -a temp_pantah/. common/
-          fi
-          rm -rf temp_pantah
-          # allow modifications / stop dirty+ABI gripes
+          echo "Cloning official Google kernel/common @ android14-6.1-2026-03_r25 (kernel 6.1.162)..."
+          git clone --depth=1 -b android14-6.1-2026-03_r25 \
+            https://android.googlesource.com/kernel/common common
+          echo "=== kernel version straight from Google source ==="
+          head -n 4 common/Makefile
+          # allow our config modifications / stop dirty+ABI gripes
           rm -f common/android/abi_gki_protected_exports_* || true
           sed -i 's/ -dirty//g;s/-dirty//g' common/scripts/setlocalversion 2>/dev/null || true
           sed -i 's/check_defconfig//' common/build.config.gki 2>/dev/null || true
           if [ ! -f common/Makefile ] || [ ! -f common/arch/arm64/configs/gki_defconfig ]; then
             echo "ERROR: kernel source tree invalid"; ls -la common; exit 1
           fi
-          echo "Source OK:"; head -n 4 common/Makefile
+          echo "Official Google source ready."
 
       - name: Download toolchains
         run: |
@@ -85,6 +83,8 @@ jobs:
         run: |
           cd common
           export PATH="${CLANG_PATH}:${PATH}"
+          echo "--- does ld.lld find libxml2? ---"
+          ldd "${CLANG_PATH}/ld.lld" 2>&1 | grep -i xml || echo "(no xml dep reported)"
           make -j"$(nproc)" LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" gki_defconfig
           test -f out/.config
 
