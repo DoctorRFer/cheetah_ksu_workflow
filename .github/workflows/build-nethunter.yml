@@ -29,7 +29,7 @@ env:
 jobs:
   build:
     name: Build NetHunter GKI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
@@ -38,7 +38,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
-            ccache zstd aria2 libssl-dev libelf-dev bc bison flex make \
+            ccache zstd aria2 libssl-dev libelf-dev libxml2 bc bison flex make \
             gcc g++ pahole zip unzip tar xz-utils curl wget
           mkdir -p output_artifacts
 
