@@ -36,10 +36,15 @@ jobs:
 
       - name: Set up build environment
         run: |
+          echo "=================================================="
+          echo "   NETHUNTER WORKFLOW v1.3  (runner: $(lsb_release -ds 2>/dev/null))"
+          echo "=================================================="
           sudo apt update
           sudo apt install -y --no-install-recommends \
-            ccache zstd aria2 libssl-dev libelf-dev libxml2 bc bison flex make \
+            ccache zstd aria2 libssl-dev libelf-dev libxml2 libxml2-dev bc bison flex make \
             gcc g++ pahole zip unzip tar xz-utils curl wget
+          echo "--- libxml2 present? ---"
+          ls -la /usr/lib/x86_64-linux-gnu/libxml2.so* 2>/dev/null || echo "!! libxml2.so.2 MISSING"
           mkdir -p output_artifacts
 
       - name: Download kernel source
@@ -85,6 +90,8 @@ jobs:
         run: |
           cd common
           export PATH="${CLANG_PATH}:${PATH}"
+          echo "--- does ld.lld find libxml2? ---"
+          ldd "${CLANG_PATH}/ld.lld" 2>&1 | grep -i xml || echo "(no xml dep reported)"
           make -j"$(nproc)" LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" gki_defconfig
           test -f out/.config
 
