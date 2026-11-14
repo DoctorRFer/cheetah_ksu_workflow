@@ -1,9 +1,9 @@
 {
   "ksu_repo": "backslashxx/KernelSU",
   "ksu_branch": "master",
-  "ksu_last_sha": "0a85333b7a99d9fc6169183a07bf954cca861c11",
+  "ksu_last_sha": "1ba972a36ad44e7d45b7fb3f9ada96d731198419",
   "susfs_repo": "https://gitlab.com/simonpunk/susfs4ksu.git",
   "susfs_branch": "gki-android14-6.1",
-  "susfs_last_sha": "342943dbef8a1e996354fd94be4a98f4d556f3df",
-  "last_updated": "2026-11-14T03:42:34Z"
+  "susfs_last_sha": "e6dc76f5671835e71b733e8b2929a7b2406cb458",
+  "last_updated": "2026-11-14T12:34:53Z"
 }
